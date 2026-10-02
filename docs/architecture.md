@@ -147,7 +147,7 @@ Use `python -m capacity monitoring` in [system-design-architecture](https://gith
   topic (see `docker/mosquitto.conf`).
 - The dashboard renders data with `textContent` only (no HTML injection from telemetry).
 - API authentication is **not implemented** in this reference (see Future improvements in the README); it belongs
-  at the gateway, as in [enterprise-saas-plateform](https://github.com/shivkumarsinghsky/enterprise-saas-plateform).
+  at the gateway, as in [enterprise-saas-platform](https://github.com/shivkumarsinghsky/enterprise-saas-platform).
 - Containers run as a non-root user; secrets only through environment variables.
 
 ## Observability
