@@ -1,0 +1,62 @@
+[
+  {
+    "id": "asset-vibration-high",
+    "metric": "vibration_mm_s",
+    "op": ">",
+    "trigger": 7.1,
+    "reset": 4.5,
+    "sustain_seconds": 30,
+    "severity": "warning",
+    "kinds": ["asset"]
+  },
+  {
+    "id": "asset-bearing-temp-high",
+    "metric": "bearing_temp_c",
+    "op": ">",
+    "trigger": 85,
+    "reset": 75,
+    "sustain_seconds": 60,
+    "severity": "critical",
+    "kinds": ["asset"]
+  },
+  {
+    "id": "host-cpu-high",
+    "metric": "cpu_pct",
+    "op": ">",
+    "trigger": 90,
+    "reset": 75,
+    "sustain_seconds": 120,
+    "severity": "warning",
+    "kinds": ["host"]
+  },
+  {
+    "id": "host-disk-free-low",
+    "metric": "disk_free_pct",
+    "op": "<",
+    "trigger": 10,
+    "reset": 15,
+    "sustain_seconds": 0,
+    "severity": "critical",
+    "kinds": ["host"]
+  },
+  {
+    "id": "service-down",
+    "metric": "up",
+    "op": "<",
+    "trigger": 0.5,
+    "reset": 0.5001,
+    "sustain_seconds": 30,
+    "severity": "critical",
+    "kinds": ["service"]
+  },
+  {
+    "id": "service-latency-high",
+    "metric": "latency_ms",
+    "op": ">",
+    "trigger": 1000,
+    "reset": 500,
+    "sustain_seconds": 60,
+    "severity": "warning",
+    "kinds": ["service"]
+  }
+]

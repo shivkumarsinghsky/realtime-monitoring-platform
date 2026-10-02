@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Real-Time Monitoring</title>
+  <style>
+    :root { --bg:#0f1419; --panel:#182028; --text:#e6e6e6; --muted:#8a97a6; --ok:#3fb950; --warn:#d29922; --crit:#f85149; }
+    * { box-sizing: border-box; }
+    body { margin:0; font:14px/1.4 system-ui, sans-serif; background:var(--bg); color:var(--text); }
+    header { padding:12px 16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #263040; }
+    h1 { font-size:16px; margin:0; } h2 { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0 0 8px; }
+    main { display:grid; grid-template-columns: 2fr 1fr; gap:16px; padding:16px; }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+    section { background:var(--panel); border-radius:8px; padding:12px; overflow:auto; }
+    table { width:100%; border-collapse:collapse; } th, td { text-align:left; padding:6px 8px; border-bottom:1px solid #263040; white-space:nowrap; }
+    th { color:var(--muted); font-weight:500; } .num { text-align:right; font-variant-numeric:tabular-nums; }
+    .sev-critical { color:var(--crit); } .sev-warning { color:var(--warn); } .sev-info { color:var(--muted); }
+    .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; background:var(--muted); }
+    .dot.on { background:var(--ok); } button { background:#263040; color:var(--text); border:0; border-radius:4px; padding:3px 8px; cursor:pointer; }
+    canvas { width:100%; height:60px; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Real-Time Monitoring</h1>
+  <span><span id="conn" class="dot"></span><span id="conn-text">connecting…</span></span>
+</header>
+<main>
+  <section>
+    <h2>Sources — latest values</h2>
+    <table><thead><tr><th>Source</th><th>Metric</th><th class="num">Value</th><th>Updated</th><th>Trend</th></tr></thead><tbody id="latest"></tbody></table>
+  </section>
+  <section>
+    <h2>Active alerts</h2>
+    <table><thead><tr><th>Severity</th><th>Source</th><th>Rule</th><th></th></tr></thead><tbody id="alerts"></tbody></table>
+  </section>
+</main>
+<script>
+  // Plain JavaScript on purpose: no build step. Values arrive over a WebSocket; a small ring buffer per series
+  // draws sparklines. Escaping uses textContent, never innerHTML with data.
+  const rows = new Map(), history = new Map();
+  const tbody = document.getElementById('latest');
+
+  function cell(text, cls) { const td = document.createElement('td'); td.textContent = text; if (cls) td.className = cls; return td; }
+
+  function upsert(r) {
+    const key = r.source + '|' + r.metric;
+    const h = history.get(key) || []; h.push(r.value); if (h.length > 60) h.shift(); history.set(key, h);
+    let tr = rows.get(key);
+    if (!tr) {
+      tr = document.createElement('tr');
+      tr.append(cell(r.source), cell(r.metric), cell('', 'num'), cell(''));
+      const td = document.createElement('td'); const c = document.createElement('canvas'); c.width = 120; c.height = 30; td.append(c); tr.append(td);
+      rows.set(key, tr);
+      [...rows.keys()].sort().forEach(k => tbody.append(rows.get(k)));
+    }
+    tr.children[2].textContent = Number(r.value).toFixed(2);
+    tr.children[3].textContent = new Date(r.ts).toLocaleTimeString();
+    spark(tr.querySelector('canvas'), h);
+  }
+
+  function spark(canvas, values) {
+    const ctx = canvas.getContext('2d'), w = canvas.width, h = canvas.height;
+    const min = Math.min(...values), max = Math.max(...values), span = (max - min) || 1;
+    ctx.clearRect(0, 0, w, h); ctx.strokeStyle = '#58a6ff'; ctx.beginPath();
+    values.forEach((v, i) => { const x = i * (w / 59), y = h - ((v - min) / span) * (h - 4) - 2; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.stroke();
+  }
+
+  async function loadAlerts() {
+    const res = await fetch('/api/alerts?limit=50');
+    const alerts = (await res.json()).filter(a => a.state !== 'resolved');
+    const body = document.getElementById('alerts'); body.replaceChildren();
+    for (const a of alerts) {
+      const tr = document.createElement('tr');
+      tr.append(cell(a.severity, 'sev-' + a.severity), cell(a.source_id), cell(a.rule_id));
+      const td = document.createElement('td');
+      if (a.state === 'open') {
+        const b = document.createElement('button'); b.textContent = 'Ack';
+        b.onclick = async () => { await fetch(`/api/alerts/${a.id}/ack`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ by: 'dashboard' }) }); loadAlerts(); };
+        td.append(b);
+      } else td.textContent = 'acked';
+      tr.append(td); tr.title = a.message; body.append(tr);
+    }
+  }
+
+  function connect() {
+    const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/live');
+    ws.onopen = () => { document.getElementById('conn').classList.add('on'); document.getElementById('conn-text').textContent = 'live'; };
+    ws.onclose = () => { document.getElementById('conn').classList.remove('on'); document.getElementById('conn-text').textContent = 'reconnecting…'; setTimeout(connect, 2000); };
+    ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.type === 'readings') m.data.forEach(upsert); else loadAlerts(); };
+  }
+
+  loadAlerts(); setInterval(loadAlerts, 15000); connect();
+</script>
+</body>
+</html>
